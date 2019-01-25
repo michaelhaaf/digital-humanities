@@ -1,4 +1,5 @@
 import argparse
+import numpy
 import pickle
 import glob
 import os
@@ -40,27 +41,43 @@ def compute_bestiaire_counts(book_data_dict):
     for book_file_path, tag_sequence in book_data_dict.items():
         sorted_tags = sorted(tag_sequence, key=lambda tag: tag.lemma)
         counts = [(i, len(list(c))) for i, c  in groupby(sorted_tags, key=lambda tag: tag.lemma)]
-        bestiaire_counts = {i: c for i, c in counts if i in bestiaire}
+        bestiaire_counts = {animal: 0 for animal in bestiaire}
+        bestiaire_counts.update({i: c for i, c in counts if i in bestiaire})
         book_bestiaire_count_dict[book_file_path] = bestiaire_counts
         print(book_file_path + ' bestiaire count complete')
     return book_bestiaire_count_dict
 
 
 def merge_author_counts(book_bestiaire_count_dict):
-    author_bestiaire_count_dict = {get_author_name_from_path_regex(key): {}
+    author_bestiaire_count_dict = {get_author_name_from_path_regex(key): Counter()
                                    for key in book_bestiaire_count_dict.keys()}
     for book_path, count_dict in book_bestiaire_count_dict.items():
         author = get_author_name_from_path_regex(book_path)
-        author_bestiaire_count_dict[author] = Counter(author_bestiaire_count_dict[author]) + Counter(count_dict)
+        author_bestiaire_count_dict[author].update(Counter(count_dict))
     return author_bestiaire_count_dict
 
 
+def bar_plot(title, names, values):
+    plt.bar(range(len(values)), values, tick_label=list(names))
+    format_plot(title)
 
-def bar_plot(names, values):
-    plt.bar(range(len(values)),values,tick_label=list(names))
+
+def format_plot(title):
     plt.xticks(rotation=90)
-    plt.savefig('bar.png')
+    plt.title(title)
+    plt.savefig(title + '.png')
     plt.show()
+
+
+def bar_plot_multiple(title, names, v1, v2):
+    plt.bar(range(len(v1)), v1, tick_label=list(names))
+    plt.bar(numpy.array(range(len(v2)))-0.2, v2, tick_label=list(names))
+    format_plot(title)
+
+
+def counter_subtract(c1, c2):
+    c1.subtract(c2)
+    return c1
 
 
 if __name__ == "__main__":
@@ -74,5 +91,15 @@ if __name__ == "__main__":
     
     book_data_dict = load_preprocessed_data(args.source_dir)
     book_bestiaire_count_dict = compute_bestiaire_counts(book_data_dict)
-    author_bestiaire_count_dict = merge_author_counts(book_bestiaire_count_dict)
-    bar_plot(author_bestiaire_count_dict['Colette'].keys(), author_bestiaire_count_dict['Colette'].values())
+    a_bestiaire_dict = merge_author_counts(book_bestiaire_count_dict)
+
+    keys = a_bestiaire_dict['Colette'].keys()
+    bar_plot('Le bestiaire de Colette', keys, a_bestiaire_dict['Colette'].values())
+    bar_plot('Le bestiaire de Giraudoux', keys, counter_subtract(a_bestiaire_dict['Giraudoux'], a_bestiaire_dict['Colette']).values())
+    bar_plot('Le bestiaire de Proust', keys, counter_subtract(a_bestiaire_dict['Proust'], a_bestiaire_dict['Colette']).values())
+    bar_plot('Le bestiaire de Maupassant', keys, counter_subtract(a_bestiaire_dict['Maupassant'], a_bestiaire_dict['Colette']).values())
+    bar_plot('Le bestiaire de Pergaud', keys, counter_subtract(a_bestiaire_dict['Pergaud'], a_bestiaire_dict['Colette']).values())
+    bar_plot('Le bestiaire de Jules Renard', keys, counter_subtract(a_bestiaire_dict['Jules Renard'], a_bestiaire_dict['Colette']).values())
+    bar_plot_multiple('Chateaubriand et Zola', keys,
+                      counter_subtract(a_bestiaire_dict['Chateaubriand'], a_bestiaire_dict['Colette']).values(),
+                      counter_subtract(a_bestiaire_dict['Zola'], a_bestiaire_dict['Colette']).values())
